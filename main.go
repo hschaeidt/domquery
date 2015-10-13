@@ -4,6 +4,8 @@ import (
 	"golang.org/x/net/html"
 	"io"
 	"net/http"
+	"fmt"
+	"strings"
 )
 
 // Contains the tokenized HTML DOM
@@ -19,6 +21,13 @@ type Query struct {
 	
 	match map[string]string //from the mapper some value(s)
 	result []html.Token // Contains token results from the matches, based on these the nextQuery will be executed
+}
+
+// Processing the search-term then launching the Document or Token search
+func (q *Query) Find(term string) []html.Token {
+	q.ProcessSearchTerm(term)
+	
+	return q.Search()
 }
 
 // Takes the decision weither to use RootSearch (DOM) or TokenSearch (List of elements)
@@ -60,7 +69,6 @@ func (q *Query) RootSearch() []html.Token {
 		
 		success = q.Match(token, token.Type)
 		
-		// Not matching, returning empty token
 		if success == true {
 			finalTokens = append(finalTokens, token)
 		}
@@ -99,6 +107,8 @@ func (q *Query) Match(token html.Token, tokenType html.TokenType) bool {
 				// Attribute does not match
 				success = false
 			}
+		default:
+			success = false
 		}
 	}
 	
@@ -116,6 +126,37 @@ func (q *Query) HasAttr(token html.Token, attrType string, searchValue string) b
 	return false
 }
 
+// Splits the searchterm in a consecutive chain of search queries using search-maps
+func (q *Query) ProcessSearchTerm(term string) {
+	var (
+		queries []string
+		subQuery *Query
+	)
+	
+	queries = strings.SplitN(term, " ", 2)
+	
+	q.CreateSearchMap(queries[0])
+	
+	// we got subselects
+	if len(queries) > 1 {
+		subQuery = new(Query)
+		// this will chain the recursively for each consecutive sub-query
+		subQuery.CreateSearchMap(queries[1])
+	}
+}
+
+func (q *Query) CreateSearchMap(query string) {
+	if q.match == nil {
+		q.match = make(map[string]string)
+	}
+	
+	if strings.HasPrefix(query, ".") {
+		q.match["class"] = strings.TrimPrefix(query, ".")
+	} else if strings.HasPrefix(query, "#") {
+		q.match["id"] = strings.TrimPrefix(query, "#")
+	}
+}
+
 // Loads the reader's input into tokenized HTML.
 // It can be used to iterate through, finding / changing values.
 func Load(reader io.Reader) {
@@ -123,9 +164,6 @@ func Load(reader io.Reader) {
 }
 
 func main() {
-	m := make(map[string]string)
-	m["class"] = "gb1"
-	
 	resp, err := http.Get("https://www.google.de/")
 	
 	defer resp.Body.Close()
@@ -133,10 +171,9 @@ func main() {
 	if err == nil {
 		Load(resp.Body)
 	
-		query := Query{
-			false, false, nil, nil, m, nil,
-		}
+		q := new(Query)
 	
-		query.Search()
+		result := q.Find(".gb1")
+		fmt.Println(result)
 	}
 }
