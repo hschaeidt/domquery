@@ -220,13 +220,13 @@ func (q *Query) Load(reader io.Reader) {
 func main() {
 	resp, err := http.Get("https://www.google.de/")
 
-	defer resp.Body.Close()
-
 	if err == nil {
+		
 		q := new(Query)
 		q.Load(resp.Body)
 
 		result := q.Find(".gb1")
 		fmt.Println(result)
+		defer resp.Body.Close()
 	}
 }
