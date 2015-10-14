@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"fmt"
 	"strings"
+	"github.com/hschaeidt/domquery/helper"
 )
 
 // Represents a DOM-Query
@@ -19,11 +20,11 @@ type Query struct {
 	nextQuery *Query // Next query object
 
 	match map[string]string //from the mapper some value(s)
-	result [][]html.Token // Contains token results from the matches, based on these the nextQuery will be executed
+	result []*helper.TokenChain // Contains token results from the matches, based on these the nextQuery will be executed
 }
 
 // Processing the search-term then launching the Document or Token search
-func (q *Query) Find(term string) [][]html.Token {
+func (q *Query) Find(term string) []*helper.TokenChain {
 	q.ProcessSearchTerm(term)
 
 	return q.Search()
@@ -31,11 +32,11 @@ func (q *Query) Find(term string) [][]html.Token {
 
 // Takes the decision weither to use RootSearch (DOM) or TokenSearch (List of elements)
 // This method also takes care to return the results of the last (sub-)query
-func (q *Query) Search() [][]html.Token {
-	var result [][]html.Token
+func (q *Query) Search() []*helper.TokenChain {
+	var result []*helper.TokenChain
 
 	if q.hasPrevQuery {
-		result = q.TokenSearch(q.prevQuery.result)
+		//result = q.TokenSearch(q.prevQuery.result)
 	} else {
 		result = q.RootSearch()
 	}
@@ -52,9 +53,7 @@ func (q *Query) Search() [][]html.Token {
 //
 // Root search is only executed for the first query in the query-chain
 // All subsequent searches are based on a array of previous resulted tokens
-func (q *Query) RootSearch() [][]html.Token {
-	var finalTokens [][]html.Token
-
+func (q *Query) RootSearch() []*helper.TokenChain {
 	for {
 		// true by default
 		success := true
@@ -66,44 +65,63 @@ func (q *Query) RootSearch() [][]html.Token {
 
 		token := q.tokenizer.Token()
 
-		success = q.Match(token, token.Type)
+		success = q.Match(token)
 
 		if success == true {
 			tokenChain := q.GetTokenChainFromTokenizer(token)
-			finalTokens = append(finalTokens, tokenChain)
+			q.result = append(q.result, tokenChain)
+			
+			// as suggested by GetTokenChainFromTokenizer() we research in the inner of the chain
+			// for other matches
+			q.TokenSearch(tokenChain)
 		}
 	}
-
-	q.result = finalTokens
-	return finalTokens
+	
+	return q.result
 }
 
-func (q *Query) TokenSearch(tokens [][]html.Token) [][]html.Token {
-	var finalTokens [][]html.Token
-
-	for _, tokenChain := range tokens {
-		for _, token := range tokenChain {
-			success := q.Match(token, token.Type)
-
-			if success == true {
-				//tokenChain := q.GetTokenChain(token, tokenChain)
-				finalTokens = append(finalTokens, tokenChain)
-			}
+// Token search iterates through a TokenChain to find sub-results
+// in the already builded chain. This may be useful in case you match the outer DIV
+// of the DOM and still want to get deeper smaller results that may also match your
+// search-term
+func (q *Query) TokenSearch(tokenChain *helper.TokenChain) []*helper.TokenChain {
+	// In this case the depth of the chain was already only 1, no further searches are required
+	tokenList, _ := tokenChain.Get()
+	if len(tokenList) <= 3 {
+		return q.result
+	}
+	
+	// this loop skips the first and the last element in the token-chain to avoid
+	// endless recursive matches
+	for i := 1; i < len(tokenList) - 2; i++ {
+		token := tokenList[i]
+		success := q.Match(token)
+		
+		if success == true {
+			// slicing out the root element (current element matched)
+			//                         ,,,,,,,,,,,,
+			tChain := q.GetTokenChain(tokenList[i:])
+			q.result = append(q.result, tChain)
+			
+			// search within the new chain again this will be done recursively upon the deepest level of the chain
+			// new results will have their own new chain
+			// TODO: upon here this can actually be done in coroutines as we are working with totally independant data
+			q.TokenSearch(tChain)
 		}
 	}
 
-	return finalTokens
+	return q.result
 }
 
 // Checks for matches from the parsed search-terms for the given Query object
-func (q *Query) Match(token html.Token, tokenType html.TokenType) bool {
+func (q *Query) Match(token html.Token) bool {
 	success := true
 
 	for domType, domValue := range q.match {
 		switch {
-		case tokenType == html.ErrorToken:
+		case token.Type == html.ErrorToken:
 			return false
-		case tokenType == html.StartTagToken:
+		case token.Type == html.StartTagToken:
 			hasAttr := q.HasAttr(token, domType, domValue)
 
 			if !hasAttr {
@@ -132,50 +150,61 @@ func (q *Query) HasAttr(token html.Token, attrType string, searchValue string) b
 // Makes a snapshot of the whole token-chain (depth) until reaching the root again
 // It takes actually the object wide tokenizer object. So each "Next()" has to be
 // sended through "SearchTokens" again, in case another inner match may occure
-func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) []html.Token {
-	var tokenChain []html.Token
-	depth := 1
-
-	// we expect rootToken to be a start-token, so that we can correctly measure the deepness
-	// of the result
+func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) *helper.TokenChain {
+	// Creating a new token chain
+	var (
+		tokenChain *helper.TokenChain
+		end bool
+	)
+	
+	tokenChain = new(helper.TokenChain)
+	
 	if rootToken.Type != html.StartTagToken {
 		return nil
 	}
-
-	tokenChain = append(tokenChain, rootToken)
+	
+	// First of all we add the rootToken to our chain
+	end = tokenChain.Add(rootToken)
 
 	for {
-		tokenType := q.tokenizer.Next()
-
-		// just avoid errors
-		if tokenType == html.ErrorToken {
-			break
+		// we reached the end of our chain
+		if end {
+			break;
 		}
-
-		// we're digging one step deeper
-		if tokenType == html.StartTagToken {
-			depth++
-		}
-
-		// and one step out
-		if tokenType == html.EndTagToken {
-			depth--
-		}
-
-		// push new item to our chain
-		tokenChain = append(tokenChain, q.tokenizer.Token())
-
-		// by verifiying against smaller than zero we ensure that the loop
-		// makes one more turn to get the rootElements EndTagToken too
-		// a correct loop will always end in minus one
-		//
-		// TODO: this may cause errors by requesting self closing tags later on
-		if depth < 0 {
-			break
-		}
+		
+		q.tokenizer.Next()
+		
+		// Adding next token
+		end = tokenChain.Add(q.tokenizer.Token())
 	}
-
+	
+	// Now we got our chain, the requester has to make sure to search through the token chain for
+	// eventual other (inner-)matches
 	return tokenChain
+}
+
+// This function is used to create a new TokenChain from a re-sliced slice
+// of an existing TokenChain
+//
+// Actually it can be used to build a chain from any slice of html.Token
+func (q *Query) GetTokenChain(tokenChain []html.Token) *helper.TokenChain {
+	var (
+		tChain *helper.TokenChain
+		end bool
+	)
+	
+	tChain = new(helper.TokenChain)
+	
+	for _, token := range tokenChain {
+		// we reached the end of our chain
+		if end {
+			break
+		}
+		
+		end = tChain.Add(token)
+	}
+	
+	return tChain
 }
 
 // Splits the searchterm in a consecutive chain of search queries using search-maps
@@ -226,7 +255,11 @@ func main() {
 		q.Load(resp.Body)
 
 		result := q.Find(".gb1")
-		fmt.Println(result)
+		
+		for _, tokenChain := range result {
+			fmt.Println(tokenChain.Get())
+		}
+		
 		defer resp.Body.Close()
 	}
 }
