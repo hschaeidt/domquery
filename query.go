@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"fmt"
 	"strings"
-	"github.com/hschaeidt/domquery/helper"
+	"github.com/hschaeidt/domquery/tokenutil"
 )
 
 // Represents a DOM-Query
@@ -20,11 +20,11 @@ type Query struct {
 	nextQuery *Query // Next query object
 
 	match map[string]string //from the mapper some value(s)
-	result []*helper.TokenChain // Contains token results from the matches, based on these the nextQuery will be executed
+	result []*tokenutil.Chain // Contains token results from the matches, based on these the nextQuery will be executed
 }
 
 // Processing the search-term then launching the Document or Token search
-func (q *Query) Find(term string) []*helper.TokenChain {
+func (q *Query) Find(term string) []*tokenutil.Chain {
 	q.ProcessSearchTerm(term)
 
 	return q.Search()
@@ -32,8 +32,8 @@ func (q *Query) Find(term string) []*helper.TokenChain {
 
 // Takes the decision weither to use RootSearch (DOM) or TokenSearch (List of elements)
 // This method also takes care to return the results of the last (sub-)query
-func (q *Query) Search() []*helper.TokenChain {
-	var result []*helper.TokenChain
+func (q *Query) Search() []*tokenutil.Chain {
+	var result []*tokenutil.Chain
 
 	if q.hasPrevQuery {
 		//result = q.TokenSearch(q.prevQuery.result)
@@ -53,7 +53,7 @@ func (q *Query) Search() []*helper.TokenChain {
 //
 // Root search is only executed for the first query in the query-chain
 // All subsequent searches are based on a array of previous resulted tokens
-func (q *Query) RootSearch() []*helper.TokenChain {
+func (q *Query) RootSearch() []*tokenutil.Chain {
 	for {
 		// true by default
 		success := true
@@ -84,7 +84,7 @@ func (q *Query) RootSearch() []*helper.TokenChain {
 // in the already builded chain. This may be useful in case you match the outer DIV
 // of the DOM and still want to get deeper smaller results that may also match your
 // search-term
-func (q *Query) TokenSearch(tokenChain *helper.TokenChain) []*helper.TokenChain {
+func (q *Query) TokenSearch(tokenChain *tokenutil.Chain) []*tokenutil.Chain {
 	// In this case the depth of the chain was already only 1, no further searches are required
 	tokenList, _ := tokenChain.Get()
 	if len(tokenList) <= 3 {
@@ -150,14 +150,14 @@ func (q *Query) HasAttr(token html.Token, attrType string, searchValue string) b
 // Makes a snapshot of the whole token-chain (depth) until reaching the root again
 // It takes actually the object wide tokenizer object. So each "Next()" has to be
 // sended through "SearchTokens" again, in case another inner match may occure
-func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) *helper.TokenChain {
+func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) *tokenutil.Chain {
 	// Creating a new token chain
 	var (
-		tokenChain *helper.TokenChain
+		tokenChain *tokenutil.Chain
 		end bool
 	)
 	
-	tokenChain = new(helper.TokenChain)
+	tokenChain = new(tokenutil.Chain)
 	
 	if rootToken.Type != html.StartTagToken {
 		return nil
@@ -187,13 +187,13 @@ func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) *helper.TokenCh
 // of an existing TokenChain
 //
 // Actually it can be used to build a chain from any slice of html.Token
-func (q *Query) GetTokenChain(tokenChain []html.Token) *helper.TokenChain {
+func (q *Query) GetTokenChain(tokenChain []html.Token) *tokenutil.Chain {
 	var (
-		tChain *helper.TokenChain
+		tChain *tokenutil.Chain
 		end bool
 	)
 	
-	tChain = new(helper.TokenChain)
+	tChain = new(tokenutil.Chain)
 	
 	for _, token := range tokenChain {
 		// we reached the end of our chain

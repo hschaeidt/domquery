@@ -1,16 +1,16 @@
-package helper
+package tokenutil
 
 import (
 	"golang.org/x/net/html"
 )
 
-type TokenChain struct {
+type Chain struct {
 	depth int
-	tokenChain []html.Token
+	collection []html.Token
 }
 
 // Adds manually a token to our chain
-func (this *TokenChain) Add(token html.Token) bool {
+func (this *Chain) Add(token html.Token) bool {
 	end := false
 	
 	tokenType := token.Type
@@ -31,7 +31,7 @@ func (this *TokenChain) Add(token html.Token) bool {
 	}
 
 	// push new item to our chain
-	this.tokenChain = append(this.tokenChain, token)
+	this.collection = append(this.collection, token)
 
 	// by verifiying against smaller than zero we ensure that the loop
 	// makes one more turn to get the rootElements EndTagToken too
@@ -46,12 +46,12 @@ func (this *TokenChain) Add(token html.Token) bool {
 }
 
 // Gets the token chain
-func (this *TokenChain) Get() ([]html.Token, bool) {
+func (this *Chain) Get() ([]html.Token, bool) {
 	var err = false
 	
-	if this.tokenChain == nil {
+	if this.collection == nil {
 		err = true
 	}
 	
-	return this.tokenChain, err
+	return this.collection, err
 }

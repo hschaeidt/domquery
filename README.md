@@ -4,7 +4,7 @@ domquery is a lightweight implementation in golang for querying and searching th
 Based on the jQuery-like selectors it gives the opportunity to get data and values from queried elements.
 
 domquery is heavely based on golangs [html package](https://godoc.org/golang.org/x/net/html) for searching and parsing through HTML in form of HTML Tokens.
-Elements returned from the lib are objects of type html.Token (golangs html package) or helper.TokenChain (github.com/hschaeidt/domquery/helper)
+Elements returned from the lib are objects of type html.Token (golangs html package) or tokenutil.Chain (github.com/hschaeidt/domquery/tokenutil)
 
 # Usage
 
