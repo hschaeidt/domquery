@@ -5,53 +5,96 @@ import (
 )
 
 type Chain struct {
+	startToken html.Token
+	textToken html.Token
+	next *Chain
+	prev *Chain
+	endToken html.Token
 	depth int
-	collection []html.Token
 }
 
-// Adds manually a token to our chain
-func (this *Chain) Add(token html.Token) bool {
+// Adds recursively tokens to the chain whereas for each StartTagToken a new
+// sub-chain will be created and linked to the current chain.
+//
+// This gives more control to the manipulation of the completed chain
+func (this *Chain) Add(token html.Token, prev *Chain) (*Chain, bool) {
+	chain := this
 	end := false
-	
 	tokenType := token.Type
-
-	// just avoid errors
-	if tokenType == html.ErrorToken {
-		end = true
+	
+	// This is only true by default if called by recursion within this func
+	if prev != nil {
+		this.prev = prev
 	}
-
-	// we're digging one step deeper
-	if tokenType == html.StartTagToken {
+	
+	// 2 StartTokens in a row encountered, creating new sub-chain linked to this chain
+	if tokenType == html.StartTagToken && this.depth > 0 {
+		chain = new(Chain)
+		this.next = chain
+		return chain.Add(token, this)
+	}
+	
+	// Setting chains basic values
+	switch tokenType {
+	case html.StartTagToken:
+		this.startToken = token
 		this.depth++
-	}
-
-	// and one step out
-	if tokenType == html.EndTagToken {
+	case html.EndTagToken:
+		this.endToken = token
 		this.depth--
+	case html.TextToken:
+		this.textToken = token
 	}
-
-	// push new item to our chain
-	this.collection = append(this.collection, token)
-
-	// by verifiying against smaller than zero we ensure that the loop
-	// makes one more turn to get the rootElements EndTagToken too
-	// a correct loop will always end in minus one
-	//
-	// TODO: this may cause errors by encoutering self closing tags later on
+	
+	// We are back at the root level
+	// This is true whenever a EntToken has been encountered
 	if this.depth == 0 {
 		end = true
 	}
 	
-	return end
+	return chain, end
 }
 
-// Gets the token chain
-func (this *Chain) Get() ([]html.Token, bool) {
-	var err = false
+// Collects a chains value
+// Always returns 2 values, a string (Text-value / field-value etc) and a chain ref
+// The chain ref will be the pointer to the next chain within the current chain
+func (this *Chain) Value() (string, *Chain) {
+	var (
+		value string
+		chain *Chain
+	)
 	
-	if this.collection == nil {
-		err = true
+	value = this.textToken.Data
+	
+	if this.next != nil {
+		chain = this.next
 	}
 	
-	return this.collection, err
+	return value, chain
+}
+
+func (this *Chain) Next() *Chain {
+	return this.next
+}
+
+func (this *Chain) Prev() *Chain {
+	return this.prev
+}
+
+func (this *Chain) StartToken() html.Token {
+	return this.startToken
+}
+
+func (this *Chain) GetRootChain() *Chain {
+	chain := this
+	
+	for {
+		if chain.prev == nil {
+			return chain
+		}
+		
+		chain = chain.prev
+	}
+	
+	return chain
 }

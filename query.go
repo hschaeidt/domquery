@@ -25,7 +25,7 @@ type Query struct {
 
 // Processing the search-term then launching the Document or Token search
 func (q *Query) Find(term string) []*tokenutil.Chain {
-	q.ProcessSearchTerm(term)
+	q.ProcessSearchTerm(term, nil)
 
 	return q.Search()
 }
@@ -85,31 +85,28 @@ func (q *Query) RootSearch() []*tokenutil.Chain {
 // of the DOM and still want to get deeper smaller results that may also match your
 // search-term
 func (q *Query) TokenSearch(tokenChain *tokenutil.Chain) []*tokenutil.Chain {
-	// In this case the depth of the chain was already only 1, no further searches are required
-	tokenList, _ := tokenChain.Get()
-	if len(tokenList) <= 3 {
-		return q.result
-	}
+	var success bool
 	
-	// this loop skips the first and the last element in the token-chain to avoid
-	// endless recursive matches
-	for i := 1; i < len(tokenList) - 2; i++ {
-		token := tokenList[i]
-		success := q.Match(token)
+	for {
+		if tokenChain.Next() == nil {
+			return q.result
+		}
+		
+		// we start with the next sub-chain, as the one passed to this func as arg counts already as match
+		tokenChain = tokenChain.Next()
+		
+		success = q.Match(tokenChain.StartToken())
 		
 		if success == true {
-			// slicing out the root element (current element matched)
-			//                         ,,,,,,,,,,,,
-			tChain := q.GetTokenChain(tokenList[i:])
-			q.result = append(q.result, tChain)
+			q.result = append(q.result, tokenChain)
 			
 			// search within the new chain again this will be done recursively upon the deepest level of the chain
 			// new results will have their own new chain
 			// TODO: upon here this can actually be done in coroutines as we are working with totally independant data
-			q.TokenSearch(tChain)
+			q.TokenSearch(tokenChain)
 		}
 	}
-
+	
 	return q.result
 }
 
@@ -164,7 +161,7 @@ func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) *tokenutil.Chai
 	}
 	
 	// First of all we add the rootToken to our chain
-	end = tokenChain.Add(rootToken)
+	tokenChain, end = tokenChain.Add(rootToken, nil)
 
 	for {
 		// we reached the end of our chain
@@ -175,12 +172,12 @@ func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) *tokenutil.Chai
 		q.tokenizer.Next()
 		
 		// Adding next token
-		end = tokenChain.Add(q.tokenizer.Token())
+		tokenChain, end = tokenChain.Add(q.tokenizer.Token(), nil)
 	}
 	
 	// Now we got our chain, the requester has to make sure to search through the token chain for
 	// eventual other (inner-)matches
-	return tokenChain
+	return tokenChain.GetRootChain()
 }
 
 // This function is used to create a new TokenChain from a re-sliced slice
@@ -201,30 +198,38 @@ func (q *Query) GetTokenChain(tokenChain []html.Token) *tokenutil.Chain {
 			break
 		}
 		
-		end = tChain.Add(token)
+		tChain, end = tChain.Add(token, nil)
 	}
 	
 	return tChain
 }
 
 // Splits the searchterm in a consecutive chain of search queries using search-maps
-func (q *Query) ProcessSearchTerm(term string) {
+func (q *Query) ProcessSearchTerm(term string, parent *Query) {
 	var (
 		queries []string
 		subQuery *Query
 	)
 
-  // Only split into 2 args, because the next query has to handle its
+  	// Only split into 2 args, because the next query has to handle its
 	// own subqueries by itself (recursion)
 	queries = strings.SplitN(term, " ", 2)
 
 	q.CreateSearchMap(queries[0])
-
+	
+	if parent != nil {
+		q.hasPrevQuery = true
+		q.prevQuery = parent
+	}
+	
 	// we got subselects
 	if len(queries) > 1 {
 		subQuery = new(Query)
+		subQuery.hasPrevQuery = true
+		subQuery.prevQuery = q
+		
 		// this will chain the recursively for each consecutive sub-query
-		subQuery.CreateSearchMap(queries[1])
+		subQuery.ProcessSearchTerm(queries[1], q)
 	}
 }
 
@@ -257,7 +262,7 @@ func main() {
 		result := q.Find(".gb1")
 		
 		for _, tokenChain := range result {
-			fmt.Println(tokenChain.Get())
+			fmt.Println(tokenChain.Value())
 		}
 		
 		defer resp.Body.Close()

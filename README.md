@@ -31,9 +31,13 @@ q.Load(myIOReader)
 // Finding HTML
 result := q.Find(".myClass")
 
-// result is a 2D array of HTML Tokens
+// result is a 2D array of values and token chains
 for _, tokenChain := range result {
-	fmt.Println(tokenChain.Get())
+	value, chain := tokenChain.Value()
+	fmt.Println(value) // prints the value of the text token if available
+	if chain != nil {
+		// do something with the sub-chain
+	}
 }
 
 // prints all results to stdout
