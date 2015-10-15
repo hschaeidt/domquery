@@ -72,3 +72,15 @@ func (this *Chain) Value() (string, *Chain) {
 	
 	return value, chain
 }
+
+func (this *Chain) Next() *Chain {
+	return this.next
+}
+
+func (this *Chain) Prev() *Chain {
+	return this.prev
+}
+
+func (this *Chain) StartToken() html.Token {
+	return this.startToken
+}

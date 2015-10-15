@@ -73,7 +73,7 @@ func (q *Query) RootSearch() []*tokenutil.Chain {
 			
 			// as suggested by GetTokenChainFromTokenizer() we research in the inner of the chain
 			// for other matches
-			// q.TokenSearch(tokenChain)
+			q.TokenSearch(tokenChain)
 		}
 	}
 	
@@ -84,36 +84,31 @@ func (q *Query) RootSearch() []*tokenutil.Chain {
 // in the already builded chain. This may be useful in case you match the outer DIV
 // of the DOM and still want to get deeper smaller results that may also match your
 // search-term
-/*
 func (q *Query) TokenSearch(tokenChain *tokenutil.Chain) []*tokenutil.Chain {
-	// In this case the depth of the chain was already only 1, no further searches are required
-	tokenList, _ := tokenChain.Get()
-	if len(tokenList) <= 3 {
-		return q.result
-	}
+	var success bool
 	
-	// this loop skips the first and the last element in the token-chain to avoid
-	// endless recursive matches
-	for i := 1; i < len(tokenList) - 2; i++ {
-		token := tokenList[i]
-		success := q.Match(token)
+	for {
+		if tokenChain.Next() == nil {
+			return q.result
+		}
+		
+		// we start with the next sub-chain, as the one passed to this func as arg counts already as match
+		tokenChain = tokenChain.Next()
+		
+		success = q.Match(tokenChain.StartToken())
 		
 		if success == true {
-			// slicing out the root element (current element matched)
-			//                         ,,,,,,,,,,,,
-			tChain := q.GetTokenChain(tokenList[i:])
-			q.result = append(q.result, tChain)
+			q.result = append(q.result, tokenChain)
 			
 			// search within the new chain again this will be done recursively upon the deepest level of the chain
 			// new results will have their own new chain
 			// TODO: upon here this can actually be done in coroutines as we are working with totally independant data
-			q.TokenSearch(tChain)
+			q.TokenSearch(tokenChain)
 		}
 	}
-
+	
 	return q.result
 }
-*/
 
 // Checks for matches from the parsed search-terms for the given Query object
 func (q *Query) Match(token html.Token) bool {
