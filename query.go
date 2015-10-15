@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"github.com/hschaeidt/domquery/tokenutil"
+	"github.com/hschaeidt/domquery/searchutil"
 )
 
 // Represents a DOM-Query
@@ -20,11 +21,15 @@ type Query struct {
 	nextQuery *Query // Next query object
 
 	match map[string]string //from the mapper some value(s)
-	result []*tokenutil.Chain // Contains token results from the matches, based on these the nextQuery will be executed
+	result *searchutil.Result // Contains token results from the matches, based on these the nextQuery will be executed
 }
 
 // Processing the search-term then launching the Document or Token search
-func (q *Query) Find(term string) []*tokenutil.Chain {
+func (q *Query) Find(term string) *searchutil.Result {
+	if q.result == nil {
+		q.result = new(searchutil.Result)
+	}
+	
 	q.ProcessSearchTerm(term, nil)
 
 	return q.Search()
@@ -32,8 +37,8 @@ func (q *Query) Find(term string) []*tokenutil.Chain {
 
 // Takes the decision weither to use RootSearch (DOM) or TokenSearch (List of elements)
 // This method also takes care to return the results of the last (sub-)query
-func (q *Query) Search() []*tokenutil.Chain {
-	var result []*tokenutil.Chain
+func (q *Query) Search() *searchutil.Result {
+	var result *searchutil.Result
 
 	if q.hasPrevQuery {
 		//result = q.TokenSearch(q.prevQuery.result)
@@ -53,7 +58,7 @@ func (q *Query) Search() []*tokenutil.Chain {
 //
 // Root search is only executed for the first query in the query-chain
 // All subsequent searches are based on a array of previous resulted tokens
-func (q *Query) RootSearch() []*tokenutil.Chain {
+func (q *Query) RootSearch() *searchutil.Result {
 	for {
 		// true by default
 		success := true
@@ -69,7 +74,7 @@ func (q *Query) RootSearch() []*tokenutil.Chain {
 
 		if success == true {
 			tokenChain := q.GetTokenChainFromTokenizer(token)
-			q.result = append(q.result, tokenChain)
+			q.result.Add(tokenChain)
 			
 			// as suggested by GetTokenChainFromTokenizer() we research in the inner of the chain
 			// for other matches
@@ -84,7 +89,7 @@ func (q *Query) RootSearch() []*tokenutil.Chain {
 // in the already builded chain. This may be useful in case you match the outer DIV
 // of the DOM and still want to get deeper smaller results that may also match your
 // search-term
-func (q *Query) TokenSearch(tokenChain *tokenutil.Chain) []*tokenutil.Chain {
+func (q *Query) TokenSearch(tokenChain *tokenutil.Chain) *searchutil.Result {
 	var success bool
 	
 	for {
@@ -98,7 +103,7 @@ func (q *Query) TokenSearch(tokenChain *tokenutil.Chain) []*tokenutil.Chain {
 		success = q.Match(tokenChain.StartToken())
 		
 		if success == true {
-			q.result = append(q.result, tokenChain)
+			q.result.Add(tokenChain)
 			
 			// search within the new chain again this will be done recursively upon the deepest level of the chain
 			// new results will have their own new chain
@@ -261,7 +266,12 @@ func main() {
 
 		result := q.Find(".gb1")
 		
-		for _, tokenChain := range result {
+		fmt.Println("The first value is: ")
+		fmt.Println(result.First().Value())
+		fmt.Println("\n")
+		
+		fmt.Println("All values are: ")
+		for _, tokenChain := range result.All() {
 			fmt.Println(tokenChain.Value())
 		}
 		
