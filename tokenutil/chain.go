@@ -84,3 +84,17 @@ func (this *Chain) Prev() *Chain {
 func (this *Chain) StartToken() html.Token {
 	return this.startToken
 }
+
+func (this *Chain) GetRootChain() *Chain {
+	chain := this
+	
+	for {
+		if chain.prev == nil {
+			return chain
+		}
+		
+		chain = chain.prev
+	}
+	
+	return chain
+}

@@ -177,7 +177,7 @@ func (q *Query) GetTokenChainFromTokenizer(rootToken html.Token) *tokenutil.Chai
 	
 	// Now we got our chain, the requester has to make sure to search through the token chain for
 	// eventual other (inner-)matches
-	return tokenChain
+	return tokenChain.GetRootChain()
 }
 
 // This function is used to create a new TokenChain from a re-sliced slice
