@@ -12,14 +12,15 @@ func TestFind(t *testing.T) {
   q.Load(strings.NewReader(dom))
 
   result := q.Find(".myClass")
+  res := result.All()
 
-  if len(result) != 3 {
-    t.Errorf("Expected: Result length of 3 - Got: Result length of %s", len(result))
+  if len(res) != 3 {
+    t.Errorf("Expected: Result length of 3 - Got: Result length of %s", len(res))
   }
 
-  res1 := result[0]
-  res2 := result[1]
-  res3 := result[2]
+  res1 := res[0]
+  res2 := res[1]
+  res3 := res[2]
 
   value, chain := res1.Value()
 

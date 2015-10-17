@@ -46,9 +46,10 @@ func main() {
 		q.Load(resp.Body)
 		// Searching through HTML with CSS-selectors
 		result := q.Find(".gb1")
+		all := result.All()
 
 		// Printing results
-		for _, tokenChain := range result {
+		for _, tokenChain := range all {
 			fmt.Println(tokenChain.Value())
 		}
 
