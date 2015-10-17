@@ -1,5 +1,7 @@
 # domquery
 
+[![Build Status](https://travis-ci.org/hschaeidt/domquery.svg?branch=master)](https://travis-ci.org/hschaeidt/domquery)
+
 domquery is a lightweight implementation in golang for querying and searching through HTML-DOMs.
 Based on CSS selectors it gives the opportunity to get data and values from queried elements.
 
