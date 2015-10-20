@@ -11,7 +11,7 @@ func TestFind(t *testing.T) {
   q := new(domquery.Query)
   q.Load(strings.NewReader(dom))
 
-  result := q.Find(".myClass")
+  result := q.Find("{class}myClass")
   res := result.All()
 
   if len(res) != 3 {

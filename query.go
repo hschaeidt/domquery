@@ -4,6 +4,7 @@ import (
 	"golang.org/x/net/html"
 	"io"
 	"strings"
+	"regexp"
 	"github.com/hschaeidt/domquery/tokenutil"
 	"github.com/hschaeidt/domquery/searchutil"
 )
@@ -201,10 +202,13 @@ func (q *Query) CreateSearchMap(query string) {
 		q.match = make(map[string]string)
 	}
 
-	if strings.HasPrefix(query, ".") {
-		q.match["class"] = strings.TrimPrefix(query, ".")
-	} else if strings.HasPrefix(query, "#") {
-		q.match["id"] = strings.TrimPrefix(query, "#")
+	reg := regexp.MustCompile("({.*})([^}]*)")
+	matches := reg.FindStringSubmatch(query)
+
+	for i := 1; i + 2 <= len(matches); i+=2 {
+		index := strings.TrimPrefix(matches[i], "{")
+		index = strings.TrimSuffix(index, "}")
+		q.match[index] = matches[i+1]
 	}
 }
 

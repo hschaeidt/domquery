@@ -45,7 +45,7 @@ func main() {
 		// Loading the HTML into the query
 		q.Load(resp.Body)
 		// Searching through HTML with CSS-selectors
-		result := q.Find(".gb1")
+		result := q.Find("{class}gb1")
 		all := result.All()
 
 		// Printing results
