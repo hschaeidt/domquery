@@ -146,6 +146,9 @@ func (q *Query) HasAttr(token html.Token, attrType string, searchValue []string)
 			iterations++
 		}
 	}
+	if results == 0 && iterations == 0 {
+		return false
+	}
 
 	return results == iterations
 }
@@ -208,15 +211,16 @@ func (q *Query) CreateSearchMap(query string) {
 		q.match = make(map[string][]string)
 	}
 
-	reg := regexp.MustCompile("({.*})([^{}]*)")
-	matches := reg.FindStringSubmatch(query)
-
-	for i := 1; i+2 <= len(matches); i += 2 {
-		index := strings.TrimPrefix(matches[i], "{")
-		index = strings.TrimSuffix(index, "}")
-		// This adds 2 or more elements from the same type in the same query
-		// for example "{class}class1{class}class2"
-		q.match[index] = append(q.match[index], matches[i+1])
+	reg := regexp.MustCompile("({.*?})([^{]*)")
+	matches := reg.FindAllStringSubmatch(query, -1)
+	for _, match := range matches {
+		for i := 1; i+2 <= len(match); i += 2 {
+			index := strings.TrimPrefix(match[i], "{")
+			index = strings.TrimSuffix(index, "}")
+			// This adds 2 or more elements from the same type in the same query
+			// for example "{class}class1{class}class2"
+			q.match[index] = append(q.match[index], match[i+1])
+		}
 	}
 }
 
