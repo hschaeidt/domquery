@@ -1,12 +1,13 @@
 package domquery
 
 import (
-	"golang.org/x/net/html"
 	"io"
-	"strings"
 	"regexp"
-	"github.com/hschaeidt/domquery/tokenutil"
+	"strings"
+
 	"github.com/hschaeidt/domquery/searchutil"
+	"github.com/hschaeidt/domquery/tokenutil"
+	"golang.org/x/net/html"
 )
 
 // Represents a DOM-Query
@@ -16,11 +17,11 @@ type Query struct {
 
 	hasPrevQuery bool
 	hasNextQuery bool // Has next query?
-	prevQuery *Query
-	nextQuery *Query // Next query object
+	prevQuery    *Query
+	nextQuery    *Query // Next query object
 
-	match map[string]string //from the mapper some value(s)
-	result *searchutil.Result // Contains token results from the matches, based on these the nextQuery will be executed
+	match  map[string][]string //from the mapper some value(s)
+	result *searchutil.Result  // Contains token results from the matches, based on these the nextQuery will be executed
 }
 
 // Processing the search-term then launching the Document or Token search
@@ -134,14 +135,22 @@ func (q *Query) Match(token html.Token) bool {
 }
 
 // Checks weither a (HTML) token has requested attribute matching specified value
-func (q *Query) HasAttr(token html.Token, attrType string, searchValue string) bool {
+func (q *Query) HasAttr(token html.Token, attrType string, searchValue []string) bool {
+	iterations := 0
+	results := 0
 	for _, attr := range token.Attr {
-		if attr.Key == attrType && attr.Val == searchValue {
-			return true
+		for _, val := range searchValue {
+			if attr.Key == attrType && strings.Contains(attr.Val, val) {
+				results++
+			}
+			iterations++
 		}
 	}
+	if results == 0 && iterations == 0 {
+		return false
+	}
 
-	return false
+	return results == iterations
 }
 
 // This function is used to create a new TokenChain from a re-sliced slice
@@ -151,7 +160,7 @@ func (q *Query) HasAttr(token html.Token, attrType string, searchValue string) b
 func (q *Query) GetTokenChain(tokenChain []html.Token) *tokenutil.Chain {
 	var (
 		tChain *tokenutil.Chain
-		end bool
+		end    bool
 	)
 
 	tChain = new(tokenutil.Chain)
@@ -171,11 +180,11 @@ func (q *Query) GetTokenChain(tokenChain []html.Token) *tokenutil.Chain {
 // Splits the searchterm in a consecutive chain of search queries using search-maps
 func (q *Query) ProcessSearchTerm(term string, parent *Query) {
 	var (
-		queries []string
+		queries  []string
 		subQuery *Query
 	)
 
-  	// Only split into 2 args, because the next query has to handle its
+	// Only split into 2 args, because the next query has to handle its
 	// own subqueries by itself (recursion)
 	queries = strings.SplitN(term, " ", 2)
 
@@ -199,21 +208,24 @@ func (q *Query) ProcessSearchTerm(term string, parent *Query) {
 
 func (q *Query) CreateSearchMap(query string) {
 	if q.match == nil {
-		q.match = make(map[string]string)
+		q.match = make(map[string][]string)
 	}
 
-	reg := regexp.MustCompile("({.*})([^}]*)")
-	matches := reg.FindStringSubmatch(query)
-
-	for i := 1; i + 2 <= len(matches); i+=2 {
-		index := strings.TrimPrefix(matches[i], "{")
-		index = strings.TrimSuffix(index, "}")
-		q.match[index] = matches[i+1]
+	reg := regexp.MustCompile("({.*?})([^{]*)")
+	matches := reg.FindAllStringSubmatch(query, -1)
+	for _, match := range matches {
+		for i := 1; i+2 <= len(match); i += 2 {
+			index := strings.TrimPrefix(match[i], "{")
+			index = strings.TrimSuffix(index, "}")
+			// This adds 2 or more elements from the same type in the same query
+			// for example "{class}class1{class}class2"
+			q.match[index] = append(q.match[index], match[i+1])
+		}
 	}
 }
 
 // Loads the reader's input into tokenized HTML.
 // It can be used to iterate through, finding / changing values.
 func (q *Query) Load(reader io.Reader) {
-	q.tokenizer = html.NewTokenizer(reader);
+	q.tokenizer = html.NewTokenizer(reader)
 }
